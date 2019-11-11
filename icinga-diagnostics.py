@@ -6,87 +6,80 @@
 # ToDo:
 # socket.gethostname just get's the short name. getfqdn return localhost
 
-import os
-import socket
-from datetime import datetime
 import getpass
-import platform
-import sys
+import logging
 import multiprocessing
+import os
+import platform
 import subprocess
+import sys
+from datetime import datetime
 
-version="0.2.0"
-timestamp=datetime.now()
+try:
+    from types import SimpleNamespace as Namespace
+except ModuleNotFoundError:
+    from argparse import Namespace
 
-class Oshost:
-    def __init__(self):
-        self.os = platform.system()
-        if self.os != "Linux":
-            self.distro = "n/a"
-        else:
-            try:
-                hostnamectl_output = str(subprocess.check_output(["hostnamectl"])).splitlines()
-                for line in hostnamectl_output:
-                    if "Operating System" in line:
-                        self.distro = str(line.split(':')[1])
-                    elif "Virtualization" in line:
-                        self.virt = str(line.split(':')[1])
-                if hasattr('self','virt') == False:
-                    self.virt = "None"
-            except AttributeError:
-                self.distro = platform.linux_distribution()[0] + " " + platform.linux_distribution()[1]
-                try:
-                    self.virt = str(subprocess.check_output(["virt-what"]))
-                except:
-                    self.virt = "Not determinable. Not running as root?"
-        self.pythonversion = sys.version.split('\n')[0]
-        self.cpucores = multiprocessing.cpu_count()
-        self.memory = (os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES'))//(1024.**3)
+version = "0.2.0"
+timestamp = datetime.now()
 
-class Icingainstance:
-    def __init__(self):
-        try:
-            versionoutput = subprocess.check_output(["icinga2","--version"]).splitlines()
-            for line in versionoutput:
-                if "Icinga 2 network monitoring daemon" in line:
-                    self.version = str(line.split(':')[1].split('-')[0])
-        except: 
-            self.version = "Not installed"
+logger = logging.getLogger("Icinga2 Diagnostics")
+streamhandler = logging.StreamHandler(sys.stdout)
+streamhandler.format('%(message)s')
+logger.addHandler(streamhandler)
+logger.setLevel(logging.INFO)
+
+
+def get_host_info():
+    operatingsystem = platform.platform()
+    pythonversion = platform.python_version()
+    cpucores = multiprocessing.cpu_count()
+    memory = (os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')) // (1024. ** 3)
+
+    return Namespace(os=operatingsystem, pythonversion=pythonversion, cpucores=cpucores, memory=memory)
+
+
+def get_icinga_info():
+    try:
+        versionoutput = subprocess.check_output(["icinga2", "--version"]).splitlines()
+        for line in versionoutput:
+            if "Icinga 2 network monitoring daemon" in line:
+                icinga_version = str(line.split(':')[1].split('-')[0])
+    except:
+        icinga_version = "Not installed"
+
+    return Namespace(version=icinga_version)
+
 
 # print header
 
-print("""### Icinga Diagnostics ###
-# Version: """ + version + """
-# Run on """ + socket.gethostname() + " at " + timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+logging.info("""### Icinga Diagnostics ###
+# Version: {} 
+# Run on {} at {}""".format(version, platform.node(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
 # check whether we are running as root or not
 
 if str(getpass.getuser()) != "root":
-    print("""
+    logger.info("""
     Not running as root. Not all checks might be successful
     """)
     runasroot = False
 
-### OS information ###
+host_info = get_host_info()
 
-icingahost = Oshost()
-
-print("""### OS ###
+logger.info("""### OS ###
         """)
 
-if icingahost.os != "Linux":
-    print("OS: " + icingahost.os)
-else:
-    print("OS: " + icingahost.distro)
-print("Virtualisation: " + icingahost.virt)
-print("Python: " + icingahost.pythonversion)
-print("CPU cores: " + str(icingahost.cpucores))
-print("RAM: " + str(icingahost.memory) + " Gi")
+logger.info("OS: {}".format(host_info.operatingsystem))
+# print("Virtualisation: " + icingahost.virt)
+logger.info("Python: {}".format(host_info.pythonversion))
+logger.info("CPU cores: {}".format(host_info.cpucores))
+logger.info("RAM: {} Gi".format(host_info.memory))
 
 print("""
 ### Icinga 2 ###
 """)
 
-icingacore = Icingainstance()
+icinga_info = get_icinga_info()
 
-print("Icinga 2: " + icingacore.version)
+print("Icinga 2: " + icinga_info.version)
