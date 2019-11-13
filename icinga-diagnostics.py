@@ -8,12 +8,12 @@
 
 import getpass
 import logging
-import multiprocessing
-import os
 import platform
-import subprocess
 import sys
 from datetime import datetime
+
+from diagnostics.Icinga2 import get_icinga2_info
+from diagnostics.Oshost import get_host
 
 try:
     from types import SimpleNamespace as Namespace
@@ -29,31 +29,9 @@ streamhandler.format('%(message)s')
 logger.addHandler(streamhandler)
 logger.setLevel(logging.INFO)
 
-
-def get_host_info():
-    operatingsystem = platform.platform()
-    pythonversion = platform.python_version()
-    cpucores = multiprocessing.cpu_count()
-    memory = (os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')) // (1024. ** 3)
-
-    return Namespace(os=operatingsystem, pythonversion=pythonversion, cpucores=cpucores, memory=memory)
-
-
-def get_icinga_info():
-    try:
-        versionoutput = subprocess.check_output(["icinga2", "--version"]).splitlines()
-        for line in versionoutput:
-            if "Icinga 2 network monitoring daemon" in line:
-                icinga_version = str(line.split(':')[1].split('-')[0])
-    except:
-        icinga_version = "Not installed"
-
-    return Namespace(version=icinga_version)
-
-
 # print header
 
-logging.info("""### Icinga Diagnostics ###
+logger.info("""### Icinga Diagnostics ###
 # Version: {} 
 # Run on {} at {}""".format(version, platform.node(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
@@ -65,7 +43,7 @@ if str(getpass.getuser()) != "root":
     """)
     runasroot = False
 
-host_info = get_host_info()
+host_info = get_host()
 
 logger.info("""### OS ###
         """)
@@ -80,6 +58,6 @@ print("""
 ### Icinga 2 ###
 """)
 
-icinga_info = get_icinga_info()
+icinga_info = get_icinga2_info()
 
 print("Icinga 2: " + icinga_info.version)
